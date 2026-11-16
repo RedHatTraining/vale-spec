@@ -1,9 +1,12 @@
-// Build the vale RPM in mock for every chroot listed below (in parallel), then push the
-// resulting SRPM and x86_64 RPM to the Nexus yum repository.
+// Build the vale RPM in mock for every chroot listed below (in parallel), then sign
+// the resulting SRPM and x86_64 RPM and push them to the Nexus yum repository.
 //
-// Agent requirements: mock, rpmdevtools (spectool) and curl installed, and the
-// Jenkins user in the "mock" group. The rhel-* chroots need the host registered
-// with subscription-manager; the centos-stream-* and fedora-* chroots do not.
+// Agent requirements: mock, rpmdevtools (spectool), rpm-sign (rpmsign) and curl
+// installed, and the Jenkins user in the "mock" group. The Jenkins user's GPG
+// keyring must hold the secret key named by GPG_KEY below, usable without a
+// passphrase prompt, because the build has no terminal to answer one.
+// The rhel-* chroots need the host registered with subscription-manager; the
+// centos-stream-* and fedora-* chroots do not.
 // Every chroot needs a matching /etc/mock/<chroot>.cfg from mock-core-configs
 // and its signing key from distribution-gpg-keys. Fedora releases past EOL are
 // moved to /etc/mock/eol/ by mock-core-configs; drop them from CHROOTS then.
@@ -28,6 +31,7 @@ def CHROOTS = [
 def SPEC    = 'vale.spec'
 def SOURCES = 'sources'   // spectool downloads Source0 here
 def OUT     = 'out'       // mock writes <OUT>/<chroot>/*.rpm and logs here
+def GPG_KEY = '530679EE' // GPG key ID that signs the published RPMs
 
 def rpm_upload_curl(rpm_file, platform, repo_name) {
     def sub_dir = rpm_file.name.endsWith('.src.rpm') ? 'SRPMS' : 'x86_64'
@@ -103,19 +107,33 @@ pipeline {
             }
         }
 
-        stage('Publish') {
+        // Signing and publishing happen on main only. Branch builds stay
+        // unsigned, so the key never signs a package that is not being released.
+        stage('Release') {
             when {
                 anyOf {
                     branch 'main'                                      // multibranch job
                     expression { env.GIT_BRANCH == 'origin/main' }     // plain pipeline job
                 }
             }
-            steps {
-                script {
-                    for (chroot in CHROOTS.keySet()) {
-                        def (platform, repo_name) = CHROOTS[chroot]
-                        for (rpm in findFiles(glob: "${OUT}/${chroot}/*.rpm")) {
-                            rpm_upload_curl(rpm, platform, repo_name)
+            stages {
+                stage('Sign') {
+                    steps {
+                        // Signs in place, so the RPMs archived below are the
+                        // same signed files that Publish uploads.
+                        sh "rpmsign --addsign --define='_gpg_name ${GPG_KEY}' ${OUT}/*/*.rpm"
+                    }
+                }
+
+                stage('Publish') {
+                    steps {
+                        script {
+                            for (chroot in CHROOTS.keySet()) {
+                                def (platform, repo_name) = CHROOTS[chroot]
+                                for (rpm in findFiles(glob: "${OUT}/${chroot}/*.rpm")) {
+                                    rpm_upload_curl(rpm, platform, repo_name)
+                                }
+                            }
                         }
                     }
                 }

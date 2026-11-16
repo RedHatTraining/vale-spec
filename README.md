@@ -44,11 +44,16 @@ The `Jenkinsfile` defines the pipeline that runs on every push:
 1. **Fetch source.** Downloads the tarball named by `Source0` in the spec.
 2. **Build.** Runs `mock` for every chroot in the `CHROOTS` map, in parallel,
    writing RPMs and logs under `out/<chroot>/`.
-3. **Publish.** On `main` only, uploads each SRPM and x86_64 RPM to the
+3. **Sign.** On `main` only, signs each SRPM and x86_64 RPM with the GPG key
+   named by `GPG_KEY` in the `Jenkinsfile`. The Jenkins agent needs the
+   `rpm-sign` package, and the Jenkins user's GPG keyring must hold that
+   secret key, usable without a passphrase prompt.
+4. **Publish.** On `main` only, uploads each signed SRPM and x86_64 RPM to the
    curriculum repositories. Packages that are already published are skipped,
    so rerunning a build for a released version is a no-op.
 
 Build output and mock logs are archived on every run, including failures.
+Builds of other branches are archived unsigned.
 
 ### Releasing a new version
 
