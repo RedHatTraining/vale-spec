@@ -1,5 +1,5 @@
 Name:          vale
-Version:       3.27.0
+Version:       3.28.1
 Release:       1%{?dist}
 Summary:       A syntax-aware, command-line linter for prose.
 License:       MIT
@@ -46,6 +46,10 @@ chmod -x LICENSE README.md
 %{_bindir}/%{name}
 
 %changelog
+* Tue Nov 24 2026 - daobrien@redhat.com - 3.28.1-1
+- 8afba90 feat: Read Markdoc
+- bafdfdb feat: Read reStructuredText and AsciiDoc in process
+- See 3.28.* rel notes for full details.
 * Mon Nov 16 2026 - daobrien@redhat.com - 3.27.0-1
 - Bump Vale version.
 - Transfer .spec file and build process to internal PTL Jenkins instance.
